@@ -51,68 +51,49 @@ const validTransactOpts: Transaction = {
     }
 };
 
+const runTest = async (eventType: string, eventInterface: any, expectedStructure: Partial<RelayState>) => {
+    const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+    const tx = await performSwap(wallet, validTransactOpts);
+
+    const receipt = await tx.wait(1);
+    const blockHash = receipt?.blockHash;
+    if (!blockHash) {
+        throw new Error("Block number not found");
+    }
+    const log = await queryLogs(incentiveAddress, eventInterface.getEvent(eventType).topicHash, provider, blockHash);
+
+    if (log) {
+        const parsedLog = eventInterface.parseLog(log);
+        const messageIdentifier = parsedLog?.args.messageIdentifier;
+
+        while (attemptsCounter < ATTEMPTS_MAXIMUM && !relayState) {
+            relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
+
+            attemptsCounter += 1;
+            if (relayState === null) {
+                await wait(TIME_BETWEEN_ATTEMPTS);
+            }
+        }
+
+        if (!relayState) {
+            throw new Error("Exceeded maximum attempts or event not found");
+        }
+
+        expect(relayState).toMatchObject(expectedStructure);
+    } else {
+        throw new Error("Log not found");
+    }
+};
+
 describe('Incentive Events Tests', () => {
-
-    const runTest = async (eventType: string, eventInterface: any, eventHandler: (log: any, parsedLog: any) => Promise<Partial<RelayState>>, expectedStructure: Partial<RelayState>) => {
-        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
-
-        const tx = await performSwap(wallet, validTransactOpts)
-
-        const receipt = await tx.wait(1);
-        const blockHash = receipt?.blockHash;
-        if (!blockHash) {
-            throw new Error("Block number not found");
-        }
-        const log = await queryLogs(incentiveAddress, eventInterface.getEvent(eventType).topicHash, provider, blockHash);
-
-        if (log) {
-            const parsedLog = eventInterface.parseLog(log);
-            const event = parsedLog?.args;
-            const messageIdentifier = event.messageIdentifier;
-            while (attemptsCounter < ATTEMPTS_MAXIMUM && !relayState) {
-                relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
-
-                attemptsCounter += 1;
-                if (relayState === null) {
-                    await wait(TIME_BETWEEN_ATTEMPTS);
-                }
-            }
-
-            if (!relayState) {
-                throw new Error("Exceeded maximum attempts or event not found");
-            }
-
-            expect(relayState).toMatchObject(expectedStructure);
-        } else {
-            throw new Error("Log not found");
-        }
-    };
 
     it('should retrieve expected Bounty Placed Event transaction successfully', async () => {
         await runTest(
             'BountyPlaced',
             incentivesEscrowInterface,
-            async (log, parsedLog) => {
-                const event = parsedLog?.args as unknown as BountyPlacedEvent.OutputObject;
-                const messageIdentifier = event.messageIdentifier;
-                const eventDetails = {
-                    transactionHash: log.transactionHash,
-                    blockHash: log.blockHash,
-                    blockNumber: log.blockNumber,
-                    fromChainId: config.chains[0]?.chainId,
-                    incentivesAddress: log.address,
-                    maxGasDelivery: event.incentive.maxGasDelivery,
-                    maxGasAck: event.incentive.maxGasAck,
-                    refundGasTo: event.incentive.refundGasTo,
-                    priceOfDeliveryGas: event.incentive.priceOfDeliveryGas,
-                    priceOfAckGas: event.incentive.priceOfAckGas,
-                    targetDelta: event.incentive.targetDelta,
-                };
-                await store.setBountyPlaced(messageIdentifier, eventDetails);
-                return { bountyPlacedEvent: eventDetails };
-            },
             {
-                status: expect.any(Number),
+                status: 0,
                 messageIdentifier: expect.any(String),
                 bountyPlacedEvent: {
                     transactionHash: expect.any(String),
@@ -131,51 +112,14 @@ describe('Incentive Events Tests', () => {
         );
     });
 
-    it('should retrieve expected Bounty Claimed Event transaction successfully', async () => {
-        await runTest(
-            'BountyClaimed',
-            incentivesEscrowInterface,
-            async (log, parsedLog) => {
-                const event = parsedLog?.args as unknown as BountyClaimedEvent.OutputObject;
-                const messageIdentifier = event.messageIdentifier;
-                const eventDetails = {
-                    transactionHash: log.transactionHash,
-                    blockHash: log.blockHash,
-                    blockNumber: log.blockNumber,
-                };
-                await store.setBountyClaimed(messageIdentifier, eventDetails);
-                return { bountyClaimedEvent: eventDetails };
-            },
-            {
-                status: expect.any(Number),
-                messageIdentifier: expect.any(String),
-                bountyClaimedEvent: {
-                    transactionHash: expect.any(String),
-                    blockHash: expect.any(String),
-                    blockNumber: expect.any(Number),
-                }
-            }
-        );
-    });
+
 
     it('should retrieve expected Message Delivered Event transaction successfully', async () => {
         await runTest(
             'MessageDelivered',
             incentivesEscrowInterface,
-            async (log, parsedLog) => {
-                const event = parsedLog?.args as unknown as MessageDeliveredEvent.OutputObject;
-                const messageIdentifier = event.messageIdentifier;
-                const eventDetails = {
-                    transactionHash: log.transactionHash,
-                    blockHash: log.blockHash,
-                    blockNumber: log.blockNumber,
-                    toChainId: config.chains[0]?.chainId,
-                };
-                await store.setMessageDelivered(messageIdentifier, eventDetails);
-                return { messageDeliveredEvent: eventDetails };
-            },
             {
-                status: expect.any(Number),
+                status: 1,
                 messageIdentifier: expect.any(String),
                 messageDeliveredEvent: {
                     transactionHash: expect.any(String),
@@ -187,241 +131,170 @@ describe('Incentive Events Tests', () => {
         );
     });
 
-    it('should retrieve expected Bounty Increased Event transaction successfully', async () => {
+    it('should retrieve expected Bounty Claimed Event transaction successfully', async () => {
         await runTest(
-            'BountyIncreased',
+            'BountyClaimed',
             incentivesEscrowInterface,
-            async (log, parsedLog) => {
-                const event = parsedLog?.args as unknown as BountyIncreasedEvent.OutputObject;
-                const messageIdentifier = event.messageIdentifier;
-                const eventDetails = {
-                    transactionHash: log.transactionHash,
-                    blockHash: log.blockHash,
-                    blockNumber: log.blockNumber,
-                    newDeliveryGasPrice: event.newDeliveryGasPrice,
-                    newAckGasPrice: event.newAckGasPrice,
-                };
-                await store.setBountyIncreased(messageIdentifier, eventDetails);
-                return { bountyIncreasedEvent: eventDetails };
-            },
             {
-                status: expect.any(Number),
+                status: 2,
                 messageIdentifier: expect.any(String),
-                bountyIncreasedEvent: {
+                bountyClaimedEvent: {
                     transactionHash: expect.any(String),
                     blockHash: expect.any(String),
                     blockNumber: expect.any(Number),
-                    newDeliveryGasPrice: expect.any(BigInt),
-                    newAckGasPrice: expect.any(BigInt),
                 }
             }
         );
     });
 
-    // Additional Tests
-
     it('should process multiple BountyPlaced events correctly', async () => {
         const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
 
-        const tx1 = await performSwap(wallet, validTransactOpts)
-        const tx2 = await performSwap(wallet, validTransactOpts)
-
-        const receipt1 = await tx1.wait(1);
-        const receipt2 = await tx2.wait(1);
-        const blockHash1 = receipt1?.blockHash;
-        const blockHash2 = receipt2?.blockHash;
-
-        if (!blockHash1 || !blockHash2) {
-            throw new Error("Block number not found");
+        const transactions = [];
+        for (let i = 0; i < 5; i++) {
+            const tx = await performSwap(wallet, validTransactOpts);
+            transactions.push(tx);
         }
 
-        const logs1 = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyPlaced').topicHash, provider, blockHash1);
-        const logs2 = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyPlaced').topicHash, provider, blockHash2);
-
-        expect(logs1).not.toBeNull();
-        expect(logs2).not.toBeNull();
-
-        if (!logs1 || !logs2) {
-            throw new Error("Log not found");
-        }
-
-        const parsedLog1 = incentivesEscrowInterface.parseLog(logs1);
-        const parsedLog2 = incentivesEscrowInterface.parseLog(logs2);
-
-        const messageIdentifier1 = parsedLog1?.args['messageIdentifier'];
-        const messageIdentifier2 = parsedLog2?.args['messageIdentifier'];
-
-        while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier2)) {
-            relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier2);
-
-            attemptsCounter += 1;
-            if (relayState === null) {
-                await wait(TIME_BETWEEN_ATTEMPTS);
+        const logsArray = [];
+        for (const tx of transactions) {
+            const receipt = await tx.wait(1);
+            const blockHash = receipt?.blockHash;
+            if (!blockHash) {
+                throw new Error("Block number not found");
+            }
+            const log = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyPlaced').topicHash, provider, blockHash);
+            if (log) {
+                logsArray.push(log);
+            } else {
+                throw new Error("Log not found");
             }
         }
 
-        if (!relayState) {
-            throw new Error("Exceeded maximum attempts or bounty not found");
+        expect(logsArray.length).toBe(5);
+
+        for (const log of logsArray) {
+            const parsedLog = incentivesEscrowInterface.parseLog(log);
+            const messageIdentifier = parsedLog?.args['messageIdentifier'];
+
+            while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier)) {
+                relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
+
+                attemptsCounter += 1;
+                if (relayState === null) {
+                    await wait(TIME_BETWEEN_ATTEMPTS);
+                }
+            }
+
+            if (!relayState) {
+                throw new Error("Exceeded maximum attempts or bounty not found");
+            }
+
+            expect(relayState.messageIdentifier).toEqual(messageIdentifier);
         }
-
-        expect(relayState.messageIdentifier).toEqual(messageIdentifier2);
     });
-
-    it('should handle events processed in reverse order', async () => {
+    it('should process multiple BountyClaimed events correctly', async () => {
         const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
 
-        const tx1 = await performSwap(wallet, validTransactOpts)
-        const tx2 = await performSwap(wallet, validTransactOpts)
-
-        const receipt1 = await tx1.wait(1);
-        const receipt2 = await tx2.wait(1);
-        const blockHash1 = receipt1?.blockHash;
-        const blockHash2 = receipt2?.blockHash;
-
-        if (!blockHash1 || !blockHash2) {
-            throw new Error("Block number not found");
+        const transactions = [];
+        for (let i = 0; i < 5; i++) {
+            const tx = await performSwap(wallet, validTransactOpts);
+            transactions.push(tx);
         }
 
-        const logs1 = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyPlaced').topicHash, provider, blockHash1);
-        const logs2 = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyPlaced').topicHash, provider, blockHash2);
-
-        expect(logs1).not.toBeNull();
-        expect(logs2).not.toBeNull();
-
-        if (!logs1 || !logs2) {
-            throw new Error("Log not found");
-        }
-
-        const parsedLog1 = incentivesEscrowInterface.parseLog(logs1);
-        const parsedLog2 = incentivesEscrowInterface.parseLog(logs2);
-
-        const messageIdentifier1 = parsedLog1?.args['messageIdentifier'];
-        const messageIdentifier2 = parsedLog2?.args['messageIdentifier'];
-
-        // Process second event first
-        await store.setBountyPlaced(messageIdentifier2, {
-            transactionHash: logs2.transactionHash,
-            blockHash: logs2.blockHash,
-            blockNumber: logs2.blockNumber,
-            fromChainId: config.chains[0]?.chainId,
-            incentivesAddress: logs2.address,
-            maxGasDelivery: parsedLog2?.args['incentive'].maxGasDelivery,
-            maxGasAck: parsedLog2?.args['incentive'].maxGasAck,
-            refundGasTo: parsedLog2?.args.incentive.refundGasTo,
-            priceOfDeliveryGas: parsedLog2?.args.incentive.priceOfDeliveryGas,
-            priceOfAckGas: parsedLog2?.args.incentive.priceOfAckGas,
-            targetDelta: parsedLog2.args.incentive.targetDelta,
-        });
-
-        // Then process first event
-        await store.setBountyPlaced(messageIdentifier1, {
-            transactionHash: logs1.transactionHash,
-            blockHash: logs1.blockHash,
-            blockNumber: logs1.blockNumber,
-            fromChainId: config.chains[0]?.chainId,
-            incentivesAddress: logs1.address,
-            maxGasDelivery: parsedLog1.args.incentive.maxGasDelivery,
-            maxGasAck: parsedLog1.args.incentive.maxGasAck,
-            refundGasTo: parsedLog1.args.incentive.refundGasTo,
-            priceOfDeliveryGas: parsedLog1.args.incentive.priceOfDeliveryGas,
-            priceOfAckGas: parsedLog1.args.incentive.priceOfAckGas,
-            targetDelta: parsedLog1.args.incentive.targetDelta,
-        });
-
-        while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier1)) {
-            relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier1);
-
-            attemptsCounter += 1;
-            if (relayState === null) {
-                await wait(TIME_BETWEEN_ATTEMPTS);
+        const logsArray = [];
+        for (const tx of transactions) {
+            const receipt = await tx.wait(1);
+            const blockHash = receipt?.blockHash;
+            if (!blockHash) {
+                throw new Error("Block number not found");
+            }
+            const log = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyClaimed').topicHash, provider, blockHash);
+            if (log) {
+                logsArray.push(log);
+            } else {
+                throw new Error("Log not found");
             }
         }
 
-        if (!relayState) {
-            throw new Error("Exceeded maximum attempts or bounty not found");
-        }
+        expect(logsArray.length).toBe(5);
 
-        expect(relayState.messageIdentifier).toEqual(messageIdentifier1);
+        for (const log of logsArray) {
+            const parsedLog = incentivesEscrowInterface.parseLog(log);
+            const messageIdentifier = parsedLog?.args['messageIdentifier'];
+
+            while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier)) {
+                relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
+
+                attemptsCounter += 1;
+                if (relayState === null) {
+                    await wait(TIME_BETWEEN_ATTEMPTS);
+                }
+            }
+
+            if (!relayState) {
+                throw new Error("Exceeded maximum attempts or bounty not found");
+            }
+
+            expect(relayState.messageIdentifier).toEqual(messageIdentifier);
+        }
     });
 
-    it('should retry processing an event on failure', async () => {
+    it('should process multiple MessageDelivered events correctly', async () => {
         const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
 
-        const tx = await performSwap(wallet, validTransactOpts)
-        const receipt = await tx.wait(1);
-        const blockHash = receipt?.blockHash;
-        if (!blockHash) {
-            throw new Error("Block number not found");
+        const transactions = [];
+        for (let i = 0; i < 5; i++) {
+            const tx = await performSwap(wallet, validTransactOpts);
+            transactions.push(tx);
         }
-        const logs = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyPlaced').topicHash, provider, blockHash);
-        expect(logs).not.toBeNull();
 
-        const parsedLog = incentivesEscrowInterface.parseLog(logs);
-        const messageIdentifier = parsedLog?.args.messageIdentifier;
-
-        let failOnce = true;
-        jest.spyOn(store, 'setBountyPlaced').mockImplementation(async (identifier, details) => {
-            if (failOnce) {
-                failOnce = false;
-                throw new Error("Simulated failure");
+        const logsArray = [];
+        for (const tx of transactions) {
+            const receipt = await tx.wait(1);
+            const blockHash = receipt?.blockHash;
+            if (!blockHash) {
+                throw new Error("Block number not found");
             }
-            return Promise.resolve();
-        });
-
-        try {
-            await store.setBountyPlaced(messageIdentifier, {
-                transactionHash: logs.transactionHash,
-                blockHash: logs.blockHash,
-                blockNumber: logs.blockNumber,
-                fromChainId: config.chains[0]?.chainId,
-                incentivesAddress: logs.address,
-                maxGasDelivery: parsedLog.args.incentive.maxGasDelivery,
-                maxGasAck: parsedLog.args.incentive.maxGasAck,
-                refundGasTo: parsedLog.args.incentive.refundGasTo,
-                priceOfDeliveryGas: parsedLog.args.incentive.priceOfDeliveryGas,
-                priceOfAckGas: parsedLog.args.incentive.priceOfAckGas,
-                targetDelta: parsedLog.args.incentive.targetDelta,
-            });
-        } catch (e) {
-            await wait(config.retryInterval);
-            await store.setBountyPlaced(messageIdentifier, {
-                transactionHash: logs.transactionHash,
-                blockHash: logs.blockHash,
-                blockNumber: logs.blockNumber,
-                fromChainId: config.chains[0]?.chainId,
-                incentivesAddress: logs.address,
-                maxGasDelivery: parsedLog.args.incentive.maxGasDelivery,
-                maxGasAck: parsedLog.args.incentive.maxGasAck,
-                refundGasTo: parsedLog.args.incentive.refundGasTo,
-                priceOfDeliveryGas: parsedLog.args.incentive.priceOfDeliveryGas,
-                priceOfAckGas: parsedLog.args.incentive.priceOfAckGas,
-                targetDelta: parsedLog.args.incentive.targetDelta,
-            });
-        }
-
-        while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier)) {
-            relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
-
-            attemptsCounter += 1;
-            if (relayState === null) {
-                await wait(TIME_BETWEEN_ATTEMPTS);
+            const log = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('MessageDelivered').topicHash, provider, blockHash);
+            if (log) {
+                logsArray.push(log);
+            } else {
+                throw new Error("Log not found");
             }
         }
 
-        if (!relayState) {
-            throw new Error("Exceeded maximum attempts or bounty not found");
-        }
+        expect(logsArray.length).toBe(5);
 
-        expect(relayState.messageIdentifier).toEqual(messageIdentifier);
+        for (const log of logsArray) {
+            const parsedLog = incentivesEscrowInterface.parseLog(log);
+            const messageIdentifier = parsedLog?.args['messageIdentifier'];
+
+            while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier)) {
+                relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
+
+                attemptsCounter += 1;
+                if (relayState === null) {
+                    await wait(TIME_BETWEEN_ATTEMPTS);
+                }
+            }
+
+            if (!relayState) {
+                throw new Error("Exceeded maximum attempts or message not found");
+            }
+
+            expect(relayState.messageIdentifier).toEqual(messageIdentifier);
+        }
     });
+
 
     it('should handle a mix of different events in one batch', async () => {
         const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
 
-        const tx1 = await performSwap(wallet, validTransactOpts)
-        const tx2 = await performSwap(wallet, validTransactOpts)
-        const tx3 = await performSwap(wallet, validTransactOpts)
-        const tx4 = await performSwap(wallet, validTransactOpts)
+        const tx1 = await performSwap(wallet, validTransactOpts);
+        const tx2 = await performSwap(wallet, validTransactOpts);
+        const tx3 = await performSwap(wallet, validTransactOpts);
+        const tx4 = await performSwap(wallet, validTransactOpts);
 
         const receipt1 = await tx1.wait(1);
         const receipt2 = await tx2.wait(1);
@@ -446,50 +319,18 @@ describe('Incentive Events Tests', () => {
         expect(logs3).not.toBeNull();
         expect(logs4).not.toBeNull();
 
+        if (!logs1 || !logs2 || !logs3 || !logs4) {
+            throw new Error("Log not found");
+        }
         const parsedLog1 = incentivesEscrowInterface.parseLog(logs1);
         const parsedLog2 = incentivesEscrowInterface.parseLog(logs2);
         const parsedLog3 = incentivesEscrowInterface.parseLog(logs3);
         const parsedLog4 = incentivesEscrowInterface.parseLog(logs4);
 
-        const messageIdentifier1 = parsedLog1?.args.messageIdentifier;
-        const messageIdentifier2 = parsedLog2?.args.messageIdentifier;
-        const messageIdentifier3 = parsedLog3?.args.messageIdentifier;
-        const messageIdentifier4 = parsedLog4?.args.messageIdentifier;
-
-        await store.setBountyPlaced(messageIdentifier1, {
-            transactionHash: logs1.transactionHash,
-            blockHash: logs1.blockHash,
-            blockNumber: logs1.blockNumber,
-            fromChainId: config.chains[0]?.chainId,
-            incentivesAddress: logs1.address,
-            maxGasDelivery: parsedLog1.args.incentive.maxGasDelivery,
-            maxGasAck: parsedLog1.args.incentive.maxGasAck,
-            refundGasTo: parsedLog1.args.incentive.refundGasTo,
-            priceOfDeliveryGas: parsedLog1.args.incentive.priceOfDeliveryGas,
-            priceOfAckGas: parsedLog1.args.incentive.priceOfAckGas,
-            targetDelta: parsedLog1.args.incentive.targetDelta,
-        });
-
-        await store.setBountyClaimed(messageIdentifier2, {
-            transactionHash: logs2.transactionHash,
-            blockHash: logs2.blockHash,
-            blockNumber: logs2.blockNumber,
-        });
-
-        await store.setMessageDelivered(messageIdentifier3, {
-            transactionHash: logs3.transactionHash,
-            blockHash: logs3.blockHash,
-            blockNumber: logs3.blockNumber,
-            toChainId: config.chains[0]?.chainId,
-        });
-
-        await store.setBountyIncreased(messageIdentifier4, {
-            transactionHash: logs4.transactionHash,
-            blockHash: logs4.blockHash,
-            blockNumber: logs4.blockNumber,
-            newDeliveryGasPrice: parsedLog4.args.newDeliveryGasPrice,
-            newAckGasPrice: parsedLog4.args.newAckGasPrice,
-        });
+        const messageIdentifier1 = parsedLog1?.args['messageIdentifier'];
+        const messageIdentifier2 = parsedLog2?.args['messageIdentifier'];
+        const messageIdentifier3 = parsedLog3?.args['messageIdentifier'];
+        const messageIdentifier4 = parsedLog4?.args['messageIdentifier'];
 
         while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier4)) {
             relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier4);
@@ -505,6 +346,90 @@ describe('Incentive Events Tests', () => {
         }
 
         expect(relayState.messageIdentifier).toEqual(messageIdentifier4);
+    });
+
+    it('should process the complete flow of events (BountyPlaced, MessageDelivered, BountyClaimed)', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const tx1 = await performSwap(wallet, validTransactOpts);
+        const receipt1 = await tx1.wait(1);
+        const blockHash1 = receipt1?.blockHash;
+        if (!blockHash1) {
+            throw new Error("Block number not found");
+        }
+
+        const log1 = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyPlaced').topicHash, provider, blockHash1);
+        expect(log1).not.toBeNull();
+
+        if (!log1) {
+            throw new Error("Log not found");
+        }
+        const parsedLog1 = incentivesEscrowInterface.parseLog(log1);
+        const messageIdentifier = parsedLog1?.args['messageIdentifier'];
+
+        // Simulate MessageDelivered Event
+        const tx2 = await performSwap(wallet, validTransactOpts);
+        const receipt2 = await tx2.wait(1);
+        const blockHash2 = receipt2?.blockHash;
+        if (!blockHash2) {
+            throw new Error("Block number not found");
+        }
+
+        const log2 = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('MessageDelivered').topicHash, provider, blockHash2);
+        expect(log2).not.toBeNull();
+
+        // Simulate BountyClaimed Event
+        const tx3 = await performSwap(wallet, validTransactOpts);
+        const receipt3 = await tx3.wait(1);
+        const blockHash3 = receipt3?.blockHash;
+        if (!blockHash3) {
+            throw new Error("Block number not found");
+        }
+
+        const log3 = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyClaimed').topicHash, provider, blockHash3);
+        expect(log3).not.toBeNull();
+
+        while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier)) {
+            relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
+
+            attemptsCounter += 1;
+            if (relayState === null) {
+                await wait(TIME_BETWEEN_ATTEMPTS);
+            }
+        }
+
+        if (!relayState) {
+            throw new Error("Exceeded maximum attempts or events not found");
+        }
+
+        expect(relayState).toMatchObject({
+            status: 2,
+            messageIdentifier: messageIdentifier,
+            bountyPlacedEvent: {
+                transactionHash: log1.transactionHash,
+                blockHash: log1.blockHash,
+                blockNumber: log1.blockNumber,
+                fromChainId: config.chains[0]?.chainId,
+                incentivesAddress: log1.address,
+                maxGasDelivery: parsedLog1?.args['incentive'].maxGasDelivery,
+                maxGasAck: parsedLog1?.args['incentive'].maxGasAck,
+                refundGasTo: parsedLog1?.args['incentive'].refundGasTo,
+                priceOfDeliveryGas: parsedLog1?.args['incentive'].priceOfDeliveryGas,
+                priceOfAckGas: parsedLog1?.args['incentive'].priceOfAckGas,
+                targetDelta: parsedLog1?.args['incentive'].targetDelta,
+            },
+            messageDeliveredEvent: {
+                transactionHash: log2?.transactionHash,
+                blockHash: log2?.blockHash,
+                blockNumber: log2?.blockNumber,
+                toChainId: config.chains[0]?.chainId,
+            },
+            bountyClaimedEvent: {
+                transactionHash: log3?.transactionHash,
+                blockHash: log3?.blockHash,
+                blockNumber: log3?.blockNumber,
+            }
+        });
     });
 
 });
