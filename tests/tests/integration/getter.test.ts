@@ -432,4 +432,400 @@ describe('Incentive Events Tests', () => {
         });
     });
 
+    it('should not retrieve relay state for BountyPlaced event with incorrect data', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const tx = await performSwap(wallet, {
+            ...validTransactOpts,
+            swapAmount: parseEther('0.0').toString(),
+        });
+
+        const receipt = await tx.wait(1);
+        const blockHash = receipt?.blockHash;
+        if (!blockHash) {
+            throw new Error("Block number not found");
+        }
+
+        const log = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyPlaced').topicHash, provider, blockHash);
+
+        if (log) {
+            const parsedLog = incentivesEscrowInterface.parseLog(log);
+            const messageIdentifier = parsedLog?.args['messageIdentifier'];
+
+            let relayState: Partial<RelayState> | null = null;
+            let attemptsCounter = 0;
+            while (attemptsCounter < ATTEMPTS_MAXIMUM && !relayState) {
+                relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
+
+                attemptsCounter += 1;
+                if (relayState === null) {
+                    await wait(TIME_BETWEEN_ATTEMPTS);
+                }
+            }
+
+            expect(relayState).toBeNull();
+        } else {
+            throw new Error("Log not found");
+        }
+    });
+
+    it('should not retrieve relay state for MessageDelivered event with incorrect data', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const tx = await performSwap(wallet, {
+            ...validTransactOpts,
+            direction: false,
+        });
+
+        const receipt = await tx.wait(1);
+        const blockHash = receipt?.blockHash;
+        if (!blockHash) {
+            throw new Error("Block number not found");
+        }
+
+        const log = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('MessageDelivered').topicHash, provider, blockHash);
+
+        if (log) {
+            const parsedLog = incentivesEscrowInterface.parseLog(log);
+            const messageIdentifier = parsedLog?.args['messageIdentifier'];
+
+            let relayState: Partial<RelayState> | null = null;
+            let attemptsCounter = 0;
+            while (attemptsCounter < ATTEMPTS_MAXIMUM && !relayState) {
+                relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
+
+                attemptsCounter += 1;
+                if (relayState === null) {
+                    await wait(TIME_BETWEEN_ATTEMPTS);
+                }
+            }
+
+            expect(relayState).toBeNull();
+        } else {
+            throw new Error("Log not found");
+        }
+    });
+
+    it('should not retrieve relay state for BountyClaimed event with incorrect data', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const tx = await performSwap(wallet, {
+            ...validTransactOpts,
+            incentivePayment: parseEther('0.0').toString(),
+        });
+
+        const receipt = await tx.wait(1);
+        const blockHash = receipt?.blockHash;
+        if (!blockHash) {
+            throw new Error("Block number not found");
+        }
+
+        const log = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('BountyClaimed').topicHash, provider, blockHash);
+
+        if (log) {
+            const parsedLog = incentivesEscrowInterface.parseLog(log);
+            const messageIdentifier = parsedLog?.args['messageIdentifier'];
+
+            let relayState: Partial<RelayState> | null = null;
+            let attemptsCounter = 0;
+            while (attemptsCounter < ATTEMPTS_MAXIMUM && !relayState) {
+                relayState = await store.getRelayStateByKey('relay_state:' + messageIdentifier);
+
+                attemptsCounter += 1;
+                if (relayState === null) {
+                    await wait(TIME_BETWEEN_ATTEMPTS);
+                }
+            }
+
+            expect(relayState).toBeNull();
+        } else {
+            throw new Error("Log not found");
+        }
+    });
+    it('should process MessageDelivered event with low gas prices', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            incentive: {
+                ...validTransactOpts.incentive,
+                priceOfDeliveryGas: "1000000000",
+                priceOfAckGas: "1000000000",
+            },
+        };
+
+        await runTest(
+            'MessageDelivered',
+            incentivesEscrowInterface,
+            {
+                status: 1,
+                messageIdentifier: expect.any(String),
+                messageDeliveredEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                    toChainId: expect.any(String),
+                }
+            }
+        );
+    });
+
+    it('should process MessageDelivered event with low gas prices', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            incentive: {
+                ...validTransactOpts.incentive,
+                priceOfDeliveryGas: "1000000000",
+                priceOfAckGas: "1000000000",
+            },
+        };
+
+        await runTest(
+            'MessageDelivered',
+            incentivesEscrowInterface,
+            {
+                status: 1,
+                messageIdentifier: expect.any(String),
+                messageDeliveredEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                    toChainId: expect.any(String),
+                }
+            }
+        );
+    });
+    it('should process BountyClaimed event with very high gas prices', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            incentive: {
+                ...validTransactOpts.incentive,
+                priceOfDeliveryGas: "100000000000",
+                priceOfAckGas: "100000000000",
+            },
+        };
+
+        await runTest(
+            'BountyClaimed',
+            incentivesEscrowInterface,
+            {
+                status: 2,
+                messageIdentifier: expect.any(String),
+                bountyClaimedEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                }
+            }
+        );
+    });
+    it('should process BountyPlaced event with minimum incentive payment', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            incentivePayment: parseEther('0.01').toString(),
+        };
+
+        await runTest(
+            'BountyClaimed',
+            incentivesEscrowInterface,
+            {
+                status: 2,
+                messageIdentifier: expect.any(String),
+                bountyPlacedEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                    fromChainId: expect.any(String),
+                    incentivesAddress: expect.any(String),
+                    maxGasDelivery: expect.any(BigInt),
+                    maxGasAck: expect.any(BigInt),
+                    refundGasTo: expect.any(String),
+                    priceOfDeliveryGas: expect.any(BigInt),
+                    priceOfAckGas: expect.any(BigInt),
+                    targetDelta: expect.any(BigInt),
+                }
+            }
+        );
+    });
+
+    it('should process BountyPlaced event with invalid refund address', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            incentive: {
+                ...validTransactOpts.incentive,
+                refundGasTo: '0x0000000000000000000000000000000000000000',
+            },
+        };
+
+        await runTest(
+            'BountyPlaced',
+            incentivesEscrowInterface,
+            {
+                status: 0,
+                messageIdentifier: expect.any(String),
+                bountyPlacedEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                    fromChainId: expect.any(String),
+                    incentivesAddress: expect.any(String),
+                    maxGasDelivery: expect.any(BigInt),
+                    maxGasAck: expect.any(BigInt),
+                    refundGasTo: '0x0000000000000000000000000000000000000000',
+                    priceOfDeliveryGas: expect.any(BigInt),
+                    priceOfAckGas: expect.any(BigInt),
+                    targetDelta: expect.any(BigInt),
+                }
+            }
+        );
+    });
+    it('should handle MessageDelivered event with invalid chain ID gracefully', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            direction: !validTransactOpts.direction, // Flip the direction
+            incentive: {
+                ...validTransactOpts.incentive,
+                toChainId: '0xINVALIDCHAINID', // Invalid Chain ID
+            },
+        };
+
+        await runTest(
+            'MessageDelivered',
+            incentivesEscrowInterface,
+            {
+                status: 1,
+                messageIdentifier: expect.any(String),
+                messageDeliveredEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                    toChainId: '0xINVALIDCHAINID',
+                }
+            }
+        );
+    });
+
+    it('should process BountyClaimed event with negative target delta', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            incentive: {
+                ...validTransactOpts.incentive,
+                targetDelta: -100,
+            },
+        };
+
+        await runTest(
+            'BountyClaimed',
+            incentivesEscrowInterface,
+            {
+                status: 2,
+                messageIdentifier: expect.any(String),
+                bountyClaimedEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                }
+            }
+        );
+    });
+    it('should process BountyPlaced event with very high swap amount', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            swapAmount: parseEther('10000').toString(),
+        };
+
+        await runTest(
+            'BountyPlaced',
+            incentivesEscrowInterface,
+            {
+                status: 0,
+                messageIdentifier: expect.any(String),
+                bountyPlacedEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                    fromChainId: expect.any(String),
+                    incentivesAddress: expect.any(String),
+                    maxGasDelivery: expect.any(BigInt),
+                    maxGasAck: expect.any(BigInt),
+                    refundGasTo: expect.any(String),
+                    priceOfDeliveryGas: expect.any(BigInt),
+                    priceOfAckGas: expect.any(BigInt),
+                    targetDelta: expect.any(BigInt),
+                }
+            }
+        );
+    });
+    it('should process MessageDelivered event with very low incentive payment', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            incentivePayment: parseEther('0.0001').toString(),
+        };
+
+        await runTest(
+            'MessageDelivered',
+            incentivesEscrowInterface,
+            {
+                status: 1,
+                messageIdentifier: expect.any(String),
+                messageDeliveredEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                    toChainId: expect.any(String),
+                }
+            }
+        );
+    });
+    it('should process BountyPlaced event with zero gas prices', async () => {
+        const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
+
+        const transactOpts = {
+            ...validTransactOpts,
+            incentive: {
+                ...validTransactOpts.incentive,
+                priceOfDeliveryGas: "0",
+                priceOfAckGas: "0",
+            },
+        };
+
+        await runTest(
+            'BountyPlaced',
+            incentivesEscrowInterface,
+            {
+                status: 0,
+                messageIdentifier: expect.any(String),
+                bountyPlacedEvent: {
+                    transactionHash: expect.any(String),
+                    blockHash: expect.any(String),
+                    blockNumber: expect.any(Number),
+                    fromChainId: expect.any(String),
+                    incentivesAddress: expect.any(String),
+                    maxGasDelivery: expect.any(BigInt),
+                    maxGasAck: expect.any(BigInt),
+                    refundGasTo: expect.any(String),
+                    priceOfDeliveryGas: BigInt(0),
+                    priceOfAckGas: BigInt(0),
+                    targetDelta: expect.any(BigInt),
+                }
+            }
+        );
+    });
+
 });
