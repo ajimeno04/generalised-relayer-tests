@@ -43,7 +43,12 @@ jobs:
       run: |
         echo "Installing Foundry and anvil"
         curl -L https://foundry.paradigm.xyz | bash
+        echo 'source $HOME/.foundry/bin/foundryup' >> $HOME/.bashrc
+        source $HOME/.bashrc
         foundryup
+        foundry --version
+        anvil --version
+
 
     - name: Install pnpm
       run: npm install -g pnpm
