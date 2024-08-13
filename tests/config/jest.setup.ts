@@ -37,6 +37,21 @@ async function startAnvil(port: string, chainId: string, pids: string[]): Promis
         }, 5000);
     });
 }
+async function tryDeployFullEnvironment(retries: number): Promise<string[]> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const result = await deployFullEnvironment();
+            console.log("Result of deployment:", result);
+            return result;
+        } catch (error) {
+            console.error(`Error during deployment (attempt ${attempt} of ${retries}):`, error);
+            if (attempt === retries) {
+                throw error;
+            }
+        }
+    }
+    throw new Error('Deployment failed after multiple attempts');
+}
 
 export default async function globalSetup() {
     const pids: string[] = [];
@@ -45,17 +60,9 @@ export default async function globalSetup() {
         await startAnvil('8545', '1', pids);
         await startAnvil('8546', '2', pids);
 
-        const [escrowAddress, vaultAAddress] = await new Promise<string[]>((resolve, reject) => {
-            deployFullEnvironment()
-                .then(result => {
-                    console.log("Result of deployment:", result);
-                    resolve(result);
-                })
-                .catch(error => {
-                    console.error("Error during deployment:", error);
-                    reject(error);
-                });
-        });
+        // Try to deploy up to 3 times if an error occurs
+        const [escrowAddress, vaultAAddress] = await tryDeployFullEnvironment(10);
+
 
         if (escrowAddress && vaultAAddress) {
             generateConfig(escrowAddress, vaultAAddress);

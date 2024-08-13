@@ -1,4 +1,4 @@
-name: Run pnpm tests
+name: Run pnpm tests with Redis
 
 on:
   push:
@@ -12,62 +12,41 @@ on:
 
 jobs:
   test:
-    name: Run pnpm tests
+    name: Run pnpm tests inside Docker with Redis
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        attempt: [1,2,3] 
+        attempt: [1, 2, 3]
 
-    # services:
-    #     redis:
-    #         image: redis:latest
-    #         ports:
-    #         - 6379:6379
-    #         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '21.7.1' 
-    
-    - name: Install curl
-      run: sudo apt-get update && sudo apt-get install -y curl
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-    - name: Install Foundry and anvil
+    - name: Start Redis container
       run: |
-        echo "Installing Foundry and anvil"
-        curl -L https://foundry.paradigm.xyz | bash
-        echo 'source $HOME/.foundry/bin/foundryup' >> $HOME/.bashrc
-        source $HOME/.bashrc
-        foundryup
-        foundry --version
-        anvil --version
+        docker run -d --name redis-test-container -p 6379:6379 redis:latest
 
+    - name: Build Relayer Docker image
+      run: docker build -t relayer-test-image -f deployments/ci/Dockerfile.tests .
 
-    - name: Install pnpm
-      run: npm install -g pnpm
-
-    - name: Install dependencies
-      run: pnpm install --no-frozen-lockfile
-
-    - name: Create typechain artifacts for relayer
-      run: pnpm postinstall
-    
-    - name: Create typechain artifacts for tests
-      run: pnpm before-test
-
-    - name: Run tests
+    - name: Run tests inside Docker container
       run: |
-        export PATH="$HOME/.foundry/bin:$PATH"
-        pnpm test
-      
+        docker run --rm --network="host" \
+          -e REDIS_HOST=127.0.0.1 \
+          -e REDIS_PORT=6379 \
+          relayer-test-image
 
-    - name: Retry test if failed
+    - name: Check Test Results
       if: ${{ failure() && matrix.attempt != '3' }}
-      run: exit 1 
+      run: exit 1
+
+    - name: Stop and remove Redis container
+      if: always()
+      run: |
+        docker stop redis-test-container
+        docker rm redis-test-container
