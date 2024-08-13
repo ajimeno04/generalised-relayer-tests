@@ -87,7 +87,38 @@ export function encodeNumber(value: number | bigint): string {
 }
 
 
-//Deployment Functions +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+export interface CatalystContractsAddresses {
+    factoryAddress: string,
+    volatileVaultTemplateAddress: string,
+    chainInterfaceAddress: string
+}
+
+export interface CatalystContracts extends CatalystContractsAddresses {
+    factory: CatalystFactory,
+    volatileVaultTemplate: CatalystVaultVolatile,
+    chainInterface: CatalystChainInterface,
+}
+
+export interface ChainDeploymentAddresses {
+    chainId: number,
+    chainIdBytes: BytesLike,
+    escrowAddress: string,
+    wethAddress: string,
+    catalyst: CatalystContractsAddresses,
+}
+
+export interface ChainDeployment extends ChainDeploymentAddresses {
+    escrow: IncentivizedMockEscrow,
+    weth: WETH9,
+    catalyst: CatalystContracts,
+}
+
+interface FullDeploymentDescription {
+    deploymentA: ChainDeployment,
+    deploymentB: ChainDeployment,
+    vaultA: CatalystVaultVolatile,
+    vaultB: CatalystVaultVolatile,
+}
 
 export async function deployMockEscrow(
     deployer: Wallet,
@@ -118,7 +149,7 @@ export async function deployCatalystFactory(
 ): Promise<CatalystFactory> {
     const factory = new CatalystFactory__factory(deployer);
     const deployResponse = await factory.deploy(
-        factoryOwner ?? deployer.address,
+        factoryOwner ?? deployer.address
     );
 
     await deployResponse.waitForDeployment();
