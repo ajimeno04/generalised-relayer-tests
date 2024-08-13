@@ -1,0 +1,43 @@
+# Dockerfile.tests located in deployments/ci
+
+# Use the official Node.js image as a base
+FROM node:21.7.1
+
+# Install curl and other necessary tools
+RUN apt-get update && apt-get install -y curl sudo
+
+# Set the working directory inside the Docker container
+WORKDIR /usr/src/app
+
+# Copy the ABIs directory first to ensure it's available during installation
+COPY ./abis ./abis
+
+# Copy package.json and pnpm-lock.yaml for dependency installation
+COPY package.json pnpm-lock.yaml ./
+
+# Install pnpm globally
+RUN npm install -g pnpm
+
+# Install app dependencies (including running the postinstall script)
+RUN pnpm install --no-frozen-lockfile
+
+# Copy the rest of the application code
+COPY . .
+
+# Ensure the install_foundry.sh script is executable
+RUN chmod +x ./deployments/ci/install_foundry.sh
+
+# Run the Foundry and anvil installation script
+RUN ./deployments/ci/install_foundry.sh
+
+# Add Foundry binaries to the PATH
+ENV PATH="/root/.foundry/bin:$PATH"
+
+# Verify that `anvil` is correctly installed and accessible
+RUN anvil --version
+
+# Run any additional setup scripts if needed
+RUN pnpm before-test  # This might be where Typechain commands are executed
+
+# Default command to run the tests
+CMD ["pnpm", "test"]
