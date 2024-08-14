@@ -1,9 +1,9 @@
 import { Wallet, parseEther, JsonRpcProvider } from 'ethers6';
-import { ATTEMPTS_MAXIMUM, TIME_BETWEEN_ATTEMPTS, loadConfig } from '../../config/config';
-import { Transaction, performSwap } from '../utils/perform-swap';
-import { IMessageEscrowEvents__factory } from '../../contracts/factories/IMessageEscrowEvents__factory';
+import { ATTEMPTS_MAXIMUM, TIME_BETWEEN_ATTEMPTS, loadConfig } from '../../../config/config';
+import { Transaction, performSwap } from '../../utils/perform-swap';
+import { IMessageEscrowEvents__factory } from '../../../contracts/factories/IMessageEscrowEvents__factory';
 import { Store } from '@App/store/store.lib';
-import { queryLogs } from '../utils/query-logs';
+import { queryLogs } from '../../utils/query-logs';
 import { BountyPlacedEvent, BountyClaimedEvent, MessageDeliveredEvent, BountyIncreasedEvent } from '@App/contracts/IMessageEscrowEvents';
 import { wait } from '@App/common/utils';
 import { RelayState } from '@App/store/store.types';
@@ -367,7 +367,6 @@ describe('Incentive Events Tests', () => {
         const parsedLog1 = incentivesEscrowInterface.parseLog(log1);
         const messageIdentifier = parsedLog1?.args['messageIdentifier'];
 
-        // Simulate MessageDelivered Event
         const tx2 = await performSwap(wallet, validTransactOpts);
         const receipt2 = await tx2.wait(1);
         const blockHash2 = receipt2?.blockHash;
@@ -378,7 +377,6 @@ describe('Incentive Events Tests', () => {
         const log2 = await queryLogs(incentiveAddress, incentivesEscrowInterface.getEvent('MessageDelivered').topicHash, provider, blockHash2);
         expect(log2).not.toBeNull();
 
-        // Simulate BountyClaimed Event
         const tx3 = await performSwap(wallet, validTransactOpts);
         const receipt3 = await tx3.wait(1);
         const blockHash3 = receipt3?.blockHash;
@@ -692,10 +690,10 @@ describe('Incentive Events Tests', () => {
 
         const transactOpts = {
             ...validTransactOpts,
-            direction: !validTransactOpts.direction, // Flip the direction
+            direction: !validTransactOpts.direction,
             incentive: {
                 ...validTransactOpts.incentive,
-                toChainId: '0xINVALIDCHAINID', // Invalid Chain ID
+                toChainId: '0xINVALIDCHAINID',
             },
         };
 
@@ -793,7 +791,7 @@ describe('Incentive Events Tests', () => {
             }
         );
     });
-    it('should process BountyPlaced event with zero gas prices', async () => {
+    it('should not process BountyPlaced event with zero gas prices', async () => {
         const wallet = new Wallet(privateKey, new JsonRpcProvider(config.chains[0]?.rpc));
 
         const transactOpts = {
