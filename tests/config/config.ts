@@ -13,7 +13,7 @@ export let config = {
         privateKey: privateKey,
         logLevel: 'debug',
         monitor: {
-            interval: 5000,
+            interval: 500,
             blockDelay: 1,
         },
         getter: {
@@ -23,10 +23,10 @@ export let config = {
         },
         submitter: {
             enabled: true,
-            newOrdersDelay: 1000,
-            retryInterval: 30000,
+            newOrdersDelay: 500,
+            retryInterval: 10000,
             processingInterval: 100,
-            maxTries: 3,
+            maxTries: 5,
             maxPendingTransactions: 50,
             evaluationRetryInterval: 3600000,
             maxEvaluationDuration: 86400000,
