@@ -169,7 +169,7 @@ export const loadConfig = (filePath: string): any => {
 // Load environment variables from .env file
 dotenv.config();
 
-const ATTEMPTS_MAXIMUM: number = process.env['ATTEMPTS_MAXIMUM'] ? parseInt(process.env['ATTEMPTS_MAXIMUM']) : 10;
+const ATTEMPTS_MAXIMUM: number = process.env['ATTEMPTS_MAXIMUM'] ? parseInt(process.env['ATTEMPTS_MAXIMUM']) : 300;
 const TIME_BETWEEN_ATTEMPTS: number = process.env['TIME_BETWEEN_ATTEMPTS'] ? parseInt(process.env['TIME_BETWEEN_ATTEMPTS']) : 1000;
 
 export { ATTEMPTS_MAXIMUM, TIME_BETWEEN_ATTEMPTS };
