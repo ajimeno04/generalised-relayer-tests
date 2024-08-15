@@ -30,6 +30,9 @@ jobs:
     - name: Start Redis container
       run: |
         docker run -d --name redis-test-container -p 6379:6379 redis:latest
+    
+    - name: Install Foundry
+      uses: foundry-rs/foundry-toolchain@v1
 
     - name: Build Relayer Docker image
       run: docker build -t relayer-test-image -f deployments/ci/Dockerfile.tests .
