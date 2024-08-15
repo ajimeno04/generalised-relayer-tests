@@ -8,7 +8,7 @@ import { generateConfig } from './config';
 
 async function startAnvil(port: string, chainId: string, pids: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-        const anvil = spawn('anvil', ['--port', port, '--chain-id', chainId, '--blocktime', '2'], { stdio: 'inherit' });
+        const anvil = spawn('anvil', ['--port', port, '--chain-id', chainId, '--block-time', '2'], { stdio: 'inherit' });
 
         if (anvil.pid) {
             pids.push(anvil.pid.toString());
