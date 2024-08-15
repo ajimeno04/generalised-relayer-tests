@@ -26,16 +26,13 @@ export default async function globalTeardown() {
             }
         }
 
-        // Attempt to gracefully stop the relayer process
-        // This could be replaced with a more targeted process stopping mechanism
         try {
-            await execPromise(`pkill -f relayer-process-name`);  // Use a specific name if possible
+            await execPromise(`pkill -f pkill anvil`);
             console.log('Relayer process stopped.');
         } catch (error) {
             console.error('Failed to stop relayer process:', error);
         }
 
-        // Clean up files, but don't fail the teardown if the files are already deleted
         try {
             await fs.unlink('./tests/config/pids.json');
             console.log('Deleted pids.json');
