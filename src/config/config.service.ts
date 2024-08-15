@@ -57,7 +57,8 @@ export class ConfigService {
     }
 
     private loadConfigFile(): Record<string, any> {
-        const configFileName = `config.${this.nodeEnv}.yaml`;
+        const configFilePath = process.env['CONFIG_FILE_PATH'];
+        const configFileName = configFilePath || `config.${this.nodeEnv}.yaml`;
 
         let rawConfig;
         try {

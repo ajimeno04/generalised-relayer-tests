@@ -21,6 +21,7 @@ function logLoadedOptions(
 }
 
 async function bootstrap() {
+
     const app = await NestFactory.create(AppModule);
     app.useWebSocketAdapter(new WsAdapter(app));
 

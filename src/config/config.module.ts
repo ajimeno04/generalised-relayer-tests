@@ -6,4 +6,4 @@ import { ConfigService } from './config.service';
     exports: [ConfigService],
     providers: [ConfigService],
 })
-export class ConfigModule {}
+export class ConfigModule { }
