@@ -1,4 +1,4 @@
-name: Run pnpm tests with Redis
+name: Run tests
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
 
 jobs:
   test:
-    name: Run pnpm tests inside Docker with Redis
+    name: Run tests 
     runs-on: ubuntu-latest
 
     strategy:
@@ -20,36 +20,41 @@ jobs:
       matrix:
         attempt: [1, 2, 3]
 
+    services:
+        redis:
+            image: redis:latest
+            ports:
+            - 6379:6379
+            options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-
-    - name: Start Redis container
-      run: |
-        docker run -d --name redis-test-container -p 6379:6379 redis:latest
     
     - name: Install Foundry
       uses: foundry-rs/foundry-toolchain@v1
 
-    - name: Build Relayer Docker image
-      run: docker build -t relayer-test-image -f deployments/ci/Dockerfile.tests .
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '21.7.1' 
+    
+    - name: Install pnpm 
+      run: npm install -g pnpm
 
-    - name: Run tests inside Docker container
-      run: |
-        docker run --rm --network="host" \
-          -e REDIS_HOST=127.0.0.1 \
-          -e REDIS_PORT=6379 \
-          relayer-test-image
+    - name: Install dependencies
+      run: pnpm install --no-frozen-lockfile
 
-    - name: Check Test Results
+    - name: Create typechain artifacts for relayer
+      run: pnpm postinstall
+    
+    - name: Create typechain artifacts for tests
+      run: pnpm before-test
+    
+    - name: Run tests
+      run: pnpm test
+      
+
+    - name: Retry test if failed
       if: ${{ failure() && matrix.attempt != '3' }}
-      run: exit 1
-
-    - name: Stop and remove Redis container
-      if: always()
-      run: |
-        docker stop redis-test-container
-        docker rm redis-test-container
+      run: exit 1 

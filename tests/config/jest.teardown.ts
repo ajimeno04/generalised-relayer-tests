@@ -27,7 +27,7 @@ export default async function globalTeardown() {
         }
 
         try {
-            await execPromise(`pkill -f pkill anvil`);
+            await execPromise(`pkill pnpm`);
             console.log('Relayer process stopped.');
         } catch (error) {
             console.error('Failed to stop relayer process:', error);
