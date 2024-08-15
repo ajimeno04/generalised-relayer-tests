@@ -17,7 +17,7 @@ const jestConfig: JestConfigWithTsJest = {
         globalSetup: `${baseTestDir}/config/jest.watch-mode.setup.ts`,
     } : {
         globalSetup: `${baseTestDir}/config/jest.setup.ts`,
-        globalTeardown: `${baseTestDir}/config/jest.teardown.ts`,
+        //globalTeardown: `${baseTestDir}/config/jest.teardown.ts`,
     }),
     transform: {
         '^.+\\.ts?$': 'ts-jest',
