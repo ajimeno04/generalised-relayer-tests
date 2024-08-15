@@ -1,4 +1,4 @@
-name: Run pnpm tests with Redis
+name: Run tests
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
 
 jobs:
   test:
-    name: Run pnpm tests inside Docker with Redis
+    name: Run tests 
     runs-on: ubuntu-latest
 
     strategy:
