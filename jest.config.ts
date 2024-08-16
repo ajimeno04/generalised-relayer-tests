@@ -11,7 +11,7 @@ const jestConfig: JestConfigWithTsJest = {
     modulePaths: ['<rootDir>'],
     moduleNameMapper: pathsToModuleNameMapper(compilerOptions.paths, { prefix: '<rootDir>' }),
     testMatch: [
-        `${baseTestDir}/tests/getter/**/*test.ts`,
+        `${baseTestDir}/tests/relay-process/**/*test.ts`,
     ],
     ...(process.env["WATCH_MODE"] ? {
         globalSetup: `${baseTestDir}/config/jest.watch-mode.setup.ts`,
