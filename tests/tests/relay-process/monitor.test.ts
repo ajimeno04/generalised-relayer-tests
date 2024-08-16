@@ -61,7 +61,7 @@ const waitForMonitorEvent = (): Promise<{ blockNumber: number; blockHash: string
     });
 };
 
-describe('Monitor Service WebSocket Integration Tests', () => {
+describe('Monitor Service Integration Tests', () => {
     it('should retrieve the latest block and broadcast its status', async () => {
         await subscribeToMonitor();
 

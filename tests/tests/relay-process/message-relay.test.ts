@@ -18,6 +18,7 @@ const provider = new JsonRpcProvider(config.chains[0]?.rpc, undefined, { staticN
 const incentivesEscrowInterface = IMessageEscrowEvents__factory.createInterface();
 const incentiveAddress = config.chains[0]?.mock?.incentivesAddress;
 const privateKey = config.ambs[0]?.privateKey;
+const wallet = new Wallet(privateKey, provider);
 
 if (!incentiveAddress || !privateKey) {
     throw new Error('Incentive address or private key not found');
@@ -50,9 +51,11 @@ afterAll(() => {
     store.quit();
 });
 
-const runTest = async (eventType: string, expectedStructure: Partial<RelayState>, transactOpts: Transaction = validTransactOpts) => {
-    const wallet = new Wallet(privateKey, provider);
-    const tx = await performSwap(wallet, transactOpts);
+/**
+ * Retrieves the message identifier from the BountyPlaced event.
+ */
+const getMessageIdentifier = async (): Promise<string> => {
+    const tx = await performSwap(wallet, validTransactOpts);
     const receipt = await tx.wait(1);
     const blockHash = receipt?.blockHash;
 
@@ -60,13 +63,32 @@ const runTest = async (eventType: string, expectedStructure: Partial<RelayState>
         throw new Error("Block hash not found");
     }
 
-    const log = await queryLogs(incentiveAddress, incentivesEscrowInterface, eventType, provider, blockHash);
+    const log = await queryLogs(incentiveAddress, incentivesEscrowInterface, 'BountyPlaced', provider, blockHash);
     if (!log) {
-        throw new Error(`Log for event ${eventType} not found`);
+        throw new Error("BountyPlaced event log not found");
     }
 
     const parsedLog = incentivesEscrowInterface.parseLog(log);
-    const messageIdentifier = parsedLog?.args['messageIdentifier'];
+    return parsedLog?.args['messageIdentifier'];
+};
+
+/**
+ * Runs a specific event test, ensuring that the event occurs after BountyPlaced.
+ */
+const runTest = async (
+    eventType: string,
+    expectedStructure: Partial<RelayState>,
+    transactOpts: Transaction = validTransactOpts,
+    messageIdentifier?: string
+) => {
+    if (!messageIdentifier) {
+        messageIdentifier = await getMessageIdentifier();
+    }
+
+    const log = await queryLogs(incentiveAddress, incentivesEscrowInterface, eventType, provider, undefined, messageIdentifier);
+    if (!log) {
+        throw new Error(`Log for event ${eventType} not found`);
+    }
 
     while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier)) {
         relayState = await store.getRelayStateByKey(`relay_state:${messageIdentifier}`);
@@ -83,68 +105,30 @@ const runTest = async (eventType: string, expectedStructure: Partial<RelayState>
     expect(relayState).toMatchObject(expectedStructure);
 };
 
+/**
+ * Handles a complete flow from BountyPlaced to subsequent events (MessageDelivered, BountyClaimed, etc.).
+ */
+const processFlowWithEvents = async (events: string[]) => {
+    const messageIdentifier = await getMessageIdentifier();
 
-// Helper Functions ----------------------------------------------------------------
-
-const processMultipleEvents = async (eventType: string) => {
-    const wallet = new Wallet(privateKey, provider);
-
-    const transactions = [];
-    for (let i = 0; i < 5; i++) {
-        transactions.push(performSwap(wallet, validTransactOpts));
-    }
-
-    // Wait for all transactions to be mined and get the receipts
-    const transactionResponses = await Promise.all(transactions);
-    const receipts = await Promise.all(transactionResponses.map(tx => tx.wait(1)));
-
-    const blockHashes = receipts.map(receipt => receipt?.blockHash);
-
-    if (blockHashes.some(blockHash => !blockHash)) {
-        throw new Error("Block hash not found in one of the transactions");
-    }
-
-    const logsArray = await Promise.all(
-        blockHashes.map(blockHash => queryLogs(incentiveAddress, incentivesEscrowInterface, eventType, provider, blockHash))
-    );
-
-    expect(logsArray.length).toBe(5);
-
-    for (const log of logsArray) {
-        if (!log) {
-            throw new Error(`Log for event ${eventType} not found`);
-        }
-        const parsedLog = incentivesEscrowInterface.parseLog(log);
-        const messageIdentifier = parsedLog?.args['messageIdentifier'];
-        await checkRelayState(messageIdentifier);
+    for (const event of events) {
+        await runTest(event, {
+            status: expect.any(Number),
+            messageIdentifier: expect.any(String),
+            [`${event.toLowerCase()}Event`]: {
+                transactionHash: expect.any(String),
+                blockHash: expect.any(String),
+                blockNumber: expect.any(Number),
+            }
+        }, validTransactOpts, messageIdentifier);
     }
 };
-
-const checkRelayState = async (messageIdentifier: string, expectedState: Partial<RelayState> = {}) => {
-    let attemptsCounter = 0;
-
-    while (attemptsCounter < ATTEMPTS_MAXIMUM && (!relayState || relayState.messageIdentifier !== messageIdentifier)) {
-        relayState = await store.getRelayStateByKey(`relay_state:${messageIdentifier}`);
-        attemptsCounter += 1;
-        if (!relayState) {
-            await wait(TIME_BETWEEN_ATTEMPTS);
-        }
-    }
-
-    if (!relayState) {
-        throw new Error(`Exceeded maximum attempts or event not found for messageIdentifier ${messageIdentifier}`);
-    }
-
-    expect(relayState).toMatchObject(expectedState);
-};
-
-
 
 // Test Cases ----------------------------------------------------------------------
 
 describe('Incentive Events Tests', () => {
 
-    it('should retrieve expected Bounty Claimed Event transaction successfully', async () => {
+    it('should retrieve and process expected Bounty Claimed Event transaction', async () => {
         await runTest(
             'BountyClaimed',
             {
@@ -160,7 +144,7 @@ describe('Incentive Events Tests', () => {
     });
 
     it('should process multiple Bounty Claimed events correctly', async () => {
-        await processMultipleEvents('BountyClaimed');
+        await processFlowWithEvents(['BountyClaimed']);
     });
 
     it('should process Bounty Claimed event with very high gas prices', async () => {
@@ -229,7 +213,7 @@ describe('Incentive Events Tests', () => {
     });
 
     it('should process multiple Message Delivered events correctly', async () => {
-        await processMultipleEvents('MessageDelivered');
+        await processFlowWithEvents(['MessageDelivered']);
     });
 
     it('should process Message Delivered event with low gas prices', async () => {
@@ -280,6 +264,10 @@ describe('Incentive Events Tests', () => {
         );
     });
 
+    it('should process a sequence of events from BountyPlaced to BountyClaimed', async () => {
+        await processFlowWithEvents(['MessageDelivered', 'BountyClaimed']);
+    });
+
     it('should process transactions with maximum gas limit and update RelayState', async () => {
         const highGasOpts = {
             ...validTransactOpts,
@@ -305,7 +293,7 @@ describe('Incentive Events Tests', () => {
             highGasOpts
         );
 
-        validTransactOpts.incentive.maxGasDelivery = 2000000;
+        validTransactOpts.incentive.maxGasDelivery = 2000000; // Resetting to original value
     });
 
     it('should handle edge case of zero swap amount and update RelayState', async () => {

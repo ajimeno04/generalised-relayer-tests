@@ -8,7 +8,7 @@ import { generateConfig } from './config';
 
 async function startAnvil(port: string, chainId: string, pids: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-        const anvil = spawn('anvil', ['--port', port, '--chain-id', chainId], { stdio: 'inherit' });
+        const anvil = spawn('anvil', ['--port', port, '--chain-id', chainId, '--block-time', '2'], { stdio: 'ignore' });
 
         if (anvil.pid) {
             pids.push(anvil.pid.toString());
@@ -66,7 +66,7 @@ export default async function globalSetup() {
 
         await new Promise<void>((resolve) => {
             const relayer = crossSpawn('sh', ['-c', 'CONFIG_FILE_PATH=./tests/config/config.test.yaml nest start'], {
-                stdio: 'inherit'
+                stdio: 'ignore'
             });
 
             if (relayer.pid) {
