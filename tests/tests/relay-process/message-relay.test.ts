@@ -193,20 +193,22 @@ describe('Incentive Events Tests', () => {
                 targetDelta: -100,
             },
         };
+        await expect(
+            runTest(
+                'BountyClaimed',
+                {
+                    status: 2,
+                    messageIdentifier: expect.any(String),
+                    bountyClaimedEvent: {
+                        transactionHash: expect.any(String),
+                        blockHash: expect.any(String),
+                        blockNumber: expect.any(Number),
+                    }
+                },
+                negativeTargetOpts
+            )
+        ).rejects.toThrow(Error);
 
-        await runTest(
-            'BountyClaimed',
-            {
-                status: 2,
-                messageIdentifier: expect.any(String),
-                bountyClaimedEvent: {
-                    transactionHash: expect.any(String),
-                    blockHash: expect.any(String),
-                    blockNumber: expect.any(Number),
-                }
-            },
-            negativeTargetOpts
-        );
     });
 
     it('should retrieve expected Message Delivered Event transaction successfully', async () => {
@@ -426,5 +428,29 @@ describe('Incentive Events Tests', () => {
                 deliveryGasCost: expect.any(BigInt),
             });
         }
+    });
+
+    it('should throw an error for insufficient incentive payment', async () => {
+        const insufficientIncentiveOpts = {
+            ...validTransactOpts,
+            incentivePayment: parseEther('0.0000000000001').toString(),
+        };
+
+        await expect(
+            runTest(
+                'MessageDelivered',
+                {
+                    status: 1,
+                    messageIdentifier: expect.any(String),
+                    messageDeliveredEvent: {
+                        transactionHash: expect.any(String),
+                        blockHash: expect.any(String),
+                        blockNumber: expect.any(Number),
+                        toChainId: expect.any(String),
+                    }
+                },
+                insufficientIncentiveOpts
+            )
+        ).rejects.toThrow(Error);
     });
 });

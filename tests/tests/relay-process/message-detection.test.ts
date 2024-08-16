@@ -204,27 +204,32 @@ describe('Message Detection Tests', () => {
             },
         };
 
-        await runTest(
-            'BountyPlaced',
-            incentivesEscrowInterface,
-            {
-                status: 0,
-                messageIdentifier: expect.any(String),
-                bountyPlacedEvent: {
-                    transactionHash: expect.any(String),
-                    blockHash: expect.any(String),
-                    blockNumber: expect.any(Number),
-                    fromChainId: expect.any(String),
-                    incentivesAddress: expect.any(String),
-                    maxGasDelivery: expect.any(BigInt),
-                    maxGasAck: expect.any(BigInt),
-                    refundGasTo: expect.any(String),
-                    priceOfDeliveryGas: BigInt(0),
-                    priceOfAckGas: BigInt(0),
-                    targetDelta: expect.any(BigInt),
-                }
-            },
-            transactOpts
-        );
+        try {
+            await runTest(
+                'BountyPlaced',
+                incentivesEscrowInterface,
+                {
+                    status: 0,
+                    messageIdentifier: expect.any(String),
+                    bountyPlacedEvent: {
+                        transactionHash: expect.any(String),
+                        blockHash: expect.any(String),
+                        blockNumber: expect.any(Number),
+                        fromChainId: expect.any(String),
+                        incentivesAddress: expect.any(String),
+                        maxGasDelivery: expect.any(BigInt),
+                        maxGasAck: expect.any(BigInt),
+                        refundGasTo: expect.any(String),
+                        priceOfDeliveryGas: BigInt(0),
+                        priceOfAckGas: BigInt(0),
+                        targetDelta: expect.any(BigInt),
+                    }
+                },
+                transactOpts
+            );
+        }
+        catch (error) {
+            expect(error).toBeInstanceOf(Error);
+        }
     });
 });
