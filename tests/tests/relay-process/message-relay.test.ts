@@ -54,16 +54,28 @@ afterAll(() => {
 /**
  * Retrieves the message identifier from the BountyPlaced event.
  */
-const getMessageIdentifier = async (): Promise<string> => {
-    const tx = await performSwap(wallet, validTransactOpts);
-    const receipt = await tx.wait(1);
-    const blockHash = receipt?.blockHash;
+const getMessageIdentifier = async (
+    transactOpts?: Transaction
+): Promise<string> => {
 
+    if (!transactOpts) {
+        transactOpts = validTransactOpts;
+    }
+    const tx = await performSwap(wallet, transactOpts);
+    const receipt = await tx.wait(1);
+
+    const blockHash = receipt?.blockHash;
     if (!blockHash) {
         throw new Error("Block hash not found");
     }
 
-    const log = await queryLogs(incentiveAddress, incentivesEscrowInterface, 'BountyPlaced', provider, blockHash);
+    const log = await queryLogs(
+        incentiveAddress,
+        incentivesEscrowInterface,
+        'BountyPlaced',
+        provider,
+        blockHash
+    );
     if (!log) {
         throw new Error("BountyPlaced event log not found");
     }
@@ -71,6 +83,7 @@ const getMessageIdentifier = async (): Promise<string> => {
     const parsedLog = incentivesEscrowInterface.parseLog(log);
     return parsedLog?.args['messageIdentifier'];
 };
+
 
 /**
  * Runs a specific event test, ensuring that the event occurs after BountyPlaced.
@@ -82,7 +95,7 @@ const runTest = async (
     messageIdentifier?: string
 ) => {
     if (!messageIdentifier) {
-        messageIdentifier = await getMessageIdentifier();
+        messageIdentifier = await getMessageIdentifier(transactOpts);
     }
 
     const log = await queryLogs(incentiveAddress, incentivesEscrowInterface, eventType, provider, undefined, messageIdentifier);
@@ -386,7 +399,7 @@ describe('Incentive Events Tests', () => {
     it('should correctly process and store RelayState when multiple message identifiers are used', async () => {
         const messageIdentifiers = [];
 
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < 5; i++) {
             await runTest(
                 'MessageDelivered',
                 {
